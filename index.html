@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Petulap - Control de Procesos</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome para Iconos -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Supabase JS Client -->
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    
+    <style>
+        /* Transiciones suaves para ocultar/mostrar vistas */
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        /* Ocultar elementos */
+        .hidden-view { display: none !important; }
+    </style>
+</head>
+<body class="bg-gray-100 text-slate-800 font-sans min-h-screen flex flex-col antialiased">
+
+    <!-- Navbar Global -->
+    <nav class="bg-slate-900 text-white p-4 shadow-md flex justify-between items-center z-10">
+        <div class="flex items-center gap-2">
+            <i class="fa-solid fa-laptop-medical text-xl text-blue-400"></i>
+            <h1 class="text-xl font-bold tracking-wide">PETULAP</h1>
+        </div>
+        <div id="nav-user-info" class="hidden-view flex items-center gap-4">
+            <span id="user-display" class="font-medium text-sm sm:text-base bg-slate-800 px-3 py-1 rounded-full"></span>
+            <button onclick="app.logout()" class="text-red-400 hover:text-red-300 transition"><i class="fa-solid fa-right-from-bracket text-lg"></i></button>
+        </div>
+    </nav>
+
+    <!-- Sistema de Notificaciones (Reemplazo de alert) -->
+    <div id="toast-container" class="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 flex flex-col gap-2 w-11/12 max-w-md pointer-events-none"></div>
+
+    <!-- MAIN CONTAINER -->
+    <main class="flex-grow flex items-center justify-center p-4 sm:p-6 w-full max-w-5xl mx-auto">
+
+        <!-- ================= VISTA: LOGIN ================= -->
+        <div id="view-login" class="w-full max-w-md bg-white rounded-3xl shadow-xl p-8 fade-in">
+            <div class="text-center mb-8">
+                <div class="bg-blue-100 text-blue-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="fa-solid fa-user-lock text-2xl"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-800">Iniciar Sesión</h2>
+                <p class="text-gray-500 text-sm mt-1">Ingresa tus credenciales de acceso</p>
+            </div>
+            
+            <form id="form-login" class="space-y-5" onsubmit="event.preventDefault(); app.login();">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Usuario</label>
+                    <input type="text" id="login-user" required class="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-lg" placeholder="Ej. Rocio, admin, owner">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Contraseña</label>
+                    <input type="password" id="login-pass" required class="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-lg" placeholder="••••••••">
+                </div>
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl text-lg transition shadow-lg shadow-blue-600/30 flex justify-center items-center gap-2">
+                    Ingresar <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </form>
+        </div>
+
+        <!-- ================= VISTA: TÉCNICO (Operación) ================= -->
+        <div id="view-tecnico" class="w-full max-w-lg bg-white rounded-3xl shadow-xl p-6 sm:p-8 hidden-view fade-in">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6 border-b pb-2"><i class="fa-solid fa-clipboard-check text-blue-500 mr-2"></i> Control de Tarea</h2>
+            
+            <!-- Datos Base -->
+            <div class="space-y-4 mb-6">
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Técnico Asignado</label>
+                    <select id="tec-nombre" class="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-lg outline-none focus:ring-2 focus:ring-blue-500 font-medium">
+                        <option value="">Selecciona tu nombre...</option>
+                        <option value="Rocio">Rocio</option>
+                        <option value="Jhon">Jhon</option>
+                        <option value="Luis">Luis</option>
+                        <option value="Romel">Romel</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Actividad / Lote</label>
+                    <input type="text" id="tec-actividad" class="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-lg outline-none focus:ring-2 focus:ring-blue-500 uppercase" placeholder="EJ. LOTE HP 450 G8">
+                </div>
+            </div>
+
+            <!-- MÁQUINA DE ESTADOS VISUAL -->
+            <!-- Estado 1: Inicio -->
+            <div id="state-inicio" class="bg-slate-50 p-5 rounded-2xl border border-slate-100">
+                <div class="mb-4">
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Total Lote (Cant. Equipos)</label>
+                    <input type="number" id="tec-total-lote" class="w-full p-4 border border-gray-300 rounded-xl text-xl text-center font-bold" placeholder="0">
+                </div>
+                <button onclick="app.registrarEvento('Inicio')" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-5 rounded-2xl text-xl transition shadow-lg shadow-green-600/30 flex flex-col items-center justify-center gap-1">
+                    <i class="fa-solid fa-play text-2xl"></i>
+                    INICIAR JORNADA
+                </button>
+            </div>
+
+            <!-- Estado 2: En Proceso (Pausa / Reinicio) -->
+            <div id="state-proceso" class="hidden-view space-y-4 bg-slate-50 p-5 rounded-2xl border border-slate-100">
+                <div class="bg-green-100 text-green-800 p-3 rounded-xl text-center font-bold mb-2 animate-pulse">
+                    <i class="fa-solid fa-cog fa-spin mr-2"></i> Actividad en curso
+                </div>
+                
+                <button onclick="app.registrarEvento('Reinicio')" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-4 rounded-xl text-lg transition shadow-md flex justify-center items-center gap-2">
+                    <i class="fa-solid fa-rotate-right"></i> REINICIAR ACTIVIDAD
+                </button>
+
+                <div class="pt-4 border-t border-gray-200">
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Motivo de Interrupción</label>
+                    <input type="text" id="tec-motivo" class="w-full p-3 border border-gray-300 rounded-xl mb-3 text-lg" placeholder="Almuerzo, Fin de turno, Falta repuesto...">
+                    <button onclick="app.registrarEvento('Interrupción')" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-4 rounded-xl text-lg transition shadow-md shadow-amber-500/30 flex justify-center items-center gap-2">
+                        <i class="fa-solid fa-pause"></i> INTERRUPCIÓN / PAUSA
+                    </button>
+                </div>
+                
+                <div class="pt-4">
+                    <button onclick="app.cambiarEstado('finalizacion')" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 rounded-xl transition text-sm flex justify-center items-center gap-2">
+                        Ir a Finalizar Lote <i class="fa-solid fa-arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Estado 3: Finalización -->
+            <div id="state-finalizacion" class="hidden-view bg-slate-50 p-5 rounded-2xl border border-slate-100">
+                <button onclick="app.cambiarEstado('proceso')" class="text-blue-600 text-sm font-bold mb-4 hover:underline"><i class="fa-solid fa-arrow-left"></i> Volver a Proceso</button>
+                
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div>
+                        <label class="block text-sm font-bold text-green-700 mb-1"><i class="fa-solid fa-check-circle"></i> Equipos OK</label>
+                        <input type="number" id="tec-ok" class="w-full p-4 border border-green-300 bg-green-50 rounded-xl text-2xl text-center font-bold text-green-800" placeholder="0">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-red-700 mb-1"><i class="fa-solid fa-triangle-exclamation"></i> Fallo/Soporte</label>
+                        <input type="number" id="tec-fallo" class="w-full p-4 border border-red-300 bg-red-50 rounded-xl text-2xl text-center font-bold text-red-800" placeholder="0">
+                    </div>
+                </div>
+                <button onclick="app.registrarEvento('Fin')" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-5 rounded-2xl text-xl transition shadow-lg shadow-red-600/30 flex flex-col items-center justify-center gap-1">
+                    <i class="fa-solid fa-stop text-2xl"></i>
+                    FINALIZAR LOTE COMPLETAMENTE
+                </button>
+            </div>
+        </div>
+
+        <!-- ================= VISTA: ADMIN / OWNER (Dashboard) ================= -->
+        <div id="view-admin" class="w-full bg-white rounded-3xl shadow-xl p-6 sm:p-8 hidden-view fade-in">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 border-b pb-4">
+                <h2 class="text-2xl font-bold text-gray-800"><i class="fa-solid fa-chart-line text-blue-500 mr-2"></i> Panel de Supervisión</h2>
+                <div class="flex gap-2">
+                    <button onclick="app.cargarRegistros()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg font-semibold transition flex items-center gap-2">
+                        <i class="fa-solid fa-arrows-rotate"></i> Refrescar
+                    </button>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto rounded-xl border border-gray-200">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-gray-50 text-gray-700 text-sm uppercase tracking-wider">
+                            <th class="p-4 border-b">Fecha / Hora</th>
+                            <th class="p-4 border-b">Técnico</th>
+                            <th class="p-4 border-b">Actividad</th>
+                            <th class="p-4 border-b">Evento</th>
+                            <th class="p-4 border-b">Detalles</th>
+                            <th class="p-4 border-b text-center">Acciones (Admin)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-registros" class="text-sm text-gray-800 divide-y divide-gray-100">
+                        <!-- Filas generadas por JS -->
+                        <tr><td colspan="6" class="p-8 text-center text-gray-500">Cargando datos...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <p class="text-xs text-gray-400 mt-4"><i class="fa-solid fa-circle-info"></i> Owner solo tiene permisos de lectura. Admin puede eliminar registros.</p>
+        </div>
+
+    </main>
+
+    <script>
+        // ==========================================
+        // CONFIGURACIÓN DE SUPABASE (Modifica aquí)
+        // ==========================================
+        const SUPABASE_URL = 'TU_PROJECT_URL_AQUI'; // Ej: https://xyz.supabase.co
+        const SUPABASE_KEY = 'TU_ANON_KEY_AQUI';    // Ej: eyJhbGci...
+        
+        let supabaseClient = null;
+        let isMockMode = false;
+
+        // Inicializar cliente
+        if (SUPABASE_URL.includes('TU_PROJECT_URL')) {
+            isMockMode = true;
+            console.warn("Supabase no configurado. Modo Mock (Pruebas Locales) activado.");
+        } else {
+            supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        }
+
+        // ==========================================
+        // LÓGICA DE LA APLICACIÓN (SPA)
+        // ==========================================
+        const app = {
+            currentUser: null, // { username, rol }
+            
+            // --- UTILIDADES ---
+            toast: function(message, type = 'info') {
+                const container = document.getElementById('toast-container');
+                const toast = document.createElement('div');
+                const colors = {
+                    success: 'bg-green-600',
+                    error: 'bg-red-600',
+                    warning: 'bg-amber-500',
+                    info: 'bg-blue-600'
+                };
+                
+                toast.className = `${colors[type]} text-white px-6 py-4 rounded-xl shadow-lg font-semibold flex items-center justify-between pointer-events-auto transform transition-all duration-300 translate-y-[-20px] opacity-0`;
+                toast.innerHTML = `
+                    <span>${message}</span>
+                    <button onclick="this.parentElement.remove()" class="ml-4 text-white hover:text-gray-200"><i class="fa-solid fa-times"></i></button>
+                `;
+                
+                container.appendChild(toast);
+                
+                // Animar entrada
+                setTimeout(() => {
+                    toast.classList.remove('translate-y-[-20px]', 'opacity-0');
+                }, 10);
+
+                // Autodestrucción
+                setTimeout(() => {
+                    toast.classList.add('opacity-0');
+                    setTimeout(() => toast.remove(), 300);
+                }, 4000);
+            },
+
+            showView: function(viewId) {
+                // Ocultar todas
+                ['view-login', 'view-tecnico', 'view-admin'].forEach(id => {
+                    document.getElementById(id).classList.add('hidden-view');
+                });
+                // Mostrar solicitada
+                document.getElementById(viewId).classList.remove('hidden-view');
+            },
+
+            cambiarEstado: function(estado) {
+                // Máquina de estados visual del Técnico
+                ['state-inicio', 'state-proceso', 'state-finalizacion'].forEach(id => {
+                    document.getElementById(id).classList.add('hidden-view');
+                });
+                document.getElementById(`state-${estado}`).classList.remove('hidden-view');
+            },
+
+            // --- AUTENTICACIÓN ---
+            login: async function() {
+                const user = document.getElementById('login-user').value.trim();
+                const pass = document.getElementById('login-pass').value.trim();
+
+                if (!user || !pass) return this.toast('Completa los campos', 'warning');
+
+                try {
+                    if (isMockMode) {
+                        // Mock Login
+                        if(user === 'admin') this.iniciarSesionExitosa({ username: 'admin', rol: 'admin' });
+                        else if(user === 'owner') this.iniciarSesionExitosa({ username: 'owner', rol: 'owner' });
+                        else this.iniciarSesionExitosa({ username: user, rol: 'tecnico' });
+                        this.toast('Modo de Prueba: Login simulado', 'info');
+                        return;
+                    }
+
+                    // Login real contra Supabase (Buscando en tabla usuarios_petulap)
+                    const { data, error } = await supabaseClient
+                        .from('usuarios_petulap')
+                        .select('*')
+                        .eq('username', user)
+                        .eq('password', pass)
+                        .single();
+
+                    if (error || !data) throw new Error('Credenciales incorrectas');
+
+                    this.iniciarSesionExitosa({ username: data.username, rol: data.rol });
+
+                } catch (error) {
+                    this.toast(error.message || 'Error al iniciar sesión', 'error');
+                }
+            },
+
+            iniciarSesionExitosa: function(userData) {
+                this.currentUser = userData;
+                
+                // UI Navbar
+                document.getElementById('nav-user-info').classList.remove('hidden-view');
+                document.getElementById('user-display').innerHTML = `<i class="fa-solid fa-user-circle mr-1"></i> ${userData.username} (${userData.rol})`;
+
+                this.toast(`Bienvenido, ${userData.username}`, 'success');
+
+                if (userData.rol === 'tecnico') {
+                    this.showView('view-tecnico');
+                    // Preseleccionar nombre en el dropdown si coincide
+                    const select = document.getElementById('tec-nombre');
+                    for(let i=0; i < select.options.length; i++){
+                        if(select.options[i].value.toLowerCase() === userData.username.toLowerCase()){
+                            select.selectedIndex = i;
+                            break;
+                        }
+                    }
+                    this.cambiarEstado('inicio');
+                } else {
+                    this.showView('view-admin');
+                    this.cargarRegistros();
+                }
+            },
+
+            logout: function() {
+                this.currentUser = null;
+                document.getElementById('nav-user-info').classList.add('hidden-view');
+                document.getElementById('form-login').reset();
+                this.showView('view-login');
+            },
+
+            // --- LÓGICA DE TÉCNICO (PAUSA 2.0) ---
+            registrarEvento: async function(evento) {
+                const tecnico = document.getElementById('tec-nombre').value;
+                const actividad = document.getElementById('tec-actividad').value.trim();
+                
+                if (!tecnico || !actividad) {
+                    return this.toast('Selecciona tu nombre y escribe la actividad.', 'warning');
+                }
+
+                // Recolectar datos según el evento
+                let motivo = null, total_lote = 0, ok = 0, fallo = 0;
+
+                if (evento === 'Inicio') {
+                    total_lote = parseInt(document.getElementById('tec-total-lote').value) || 0;
+                    if (total_lote <= 0) return this.toast('Ingresa el Total del Lote.', 'warning');
+                } 
+                else if (evento === 'Interrupción') {
+                    motivo = document.getElementById('tec-motivo').value.trim();
+                    if (!motivo) return this.toast('Escribe el motivo de la pausa.', 'warning');
+                }
+                else if (evento === 'Fin') {
+                    ok = parseInt(document.getElementById('tec-ok').value) || 0;
+                    fallo = parseInt(document.getElementById('tec-fallo').value) || 0;
+                    if (ok === 0 && fallo === 0) return this.toast('Ingresa la cantidad de OK o Fallos.', 'warning');
+                }
+
+                const registro = {
+                    tecnico, actividad, evento, motivo, total_lote, ok, fallo
+                };
+
+                try {
+                    if (isMockMode) {
+                        console.log("Mock Insert:", registro);
+                        this.procesarRespuestaEvento(evento);
+                        return;
+                    }
+
+                    // Insert real en Supabase
+                    const { error } = await supabaseClient
+                        .from('registros_petulap')
+                        .insert([registro]);
+
+                    if (error) throw error;
+                    this.procesarRespuestaEvento(evento);
+
+                } catch (error) {
+                    console.error(error);
+                    this.toast('Error al guardar en base de datos.', 'error');
+                }
+            },
+
+            procesarRespuestaEvento: function(evento) {
+                this.toast(`Evento "${evento}" registrado correctamente.`, 'success');
+
+                // Cambiar estado de la UI según lo presionado
+                if (evento === 'Inicio' || evento === 'Reinicio') {
+                    this.cambiarEstado('proceso');
+                } 
+                else if (evento === 'Interrupción') {
+                    document.getElementById('tec-motivo').value = ''; // limpiar
+                    this.cambiarEstado('inicio'); // Vuelve al inicio para cuando vuelva
+                }
+                else if (evento === 'Fin') {
+                    // Limpiar todo para el siguiente lote
+                    document.getElementById('tec-actividad').value = '';
+                    document.getElementById('tec-total-lote').value = '';
+                    document.getElementById('tec-ok').value = '';
+                    document.getElementById('tec-fallo').value = '';
+                    this.cambiarEstado('inicio');
+                }
+            },
+
+            // --- LÓGICA DE ADMIN / OWNER ---
+            cargarRegistros: async function() {
+                const tbody = document.getElementById('tabla-registros');
+                tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center"><i class="fa-solid fa-spinner fa-spin text-2xl text-blue-500"></i></td></tr>';
+
+                if (isMockMode) {
+                    tbody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-gray-500">Conecta Supabase para ver los registros reales.</td></tr>`;
+                    return;
+                }
+
+                try {
+                    const { data, error } = await supabaseClient
+                        .from('registros_petulap')
+                        .select('*')
+                        .order('fecha_hora', { ascending: false })
+                        .limit(50); // Últimos 50 para el MVP
+
+                    if (error) throw error;
+
+                    if (data.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-gray-500">No hay registros aún.</td></tr>';
+                        return;
+                    }
+
+                    tbody.innerHTML = '';
+                    data.forEach(row => {
+                        const fecha = new Date(row.fecha_hora).toLocaleString('es-ES', { 
+                            day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' 
+                        });
+
+                        // Colores semafóricos para el texto del evento
+                        let colorEvento = 'text-gray-800';
+                        if(row.evento === 'Inicio' || row.evento === 'Reinicio') colorEvento = 'text-green-600 font-bold';
+                        if(row.evento === 'Interrupción') colorEvento = 'text-amber-600 font-bold';
+                        if(row.evento === 'Fin') colorEvento = 'text-red-600 font-bold';
+
+                        // Construir detalles
+                        let detalles = '-';
+                        if(row.evento === 'Inicio') detalles = `Lote: ${row.total_lote}`;
+                        if(row.evento === 'Interrupción') detalles = `Motivo: ${row.motivo}`;
+                        if(row.evento === 'Fin') detalles = `OK: ${row.ok} | Fallos: ${row.fallo}`;
+
+                        // Botón eliminar solo si es admin
+                        const btnEliminar = this.currentUser.rol === 'admin' 
+                            ? `<button onclick="app.eliminarRegistro('${row.id}')" class="text-red-500 hover:text-red-700 bg-red-50 p-2 rounded"><i class="fa-solid fa-trash"></i></button>`
+                            : `<span class="text-gray-300 text-xs">Solo lectura</span>`;
+
+                        const tr = document.createElement('tr');
+                        tr.className = 'hover:bg-gray-50 transition';
+                        tr.innerHTML = `
+                            <td class="p-4">${fecha}</td>
+                            <td class="p-4 font-semibold">${row.tecnico}</td>
+                            <td class="p-4">${row.actividad}</td>
+                            <td class="p-4 ${colorEvento}">${row.evento}</td>
+                            <td class="p-4 text-gray-600 text-sm">${detalles}</td>
+                            <td class="p-4 text-center">${btnEliminar}</td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+
+                } catch (error) {
+                    console.error(error);
+                    tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-red-500">Error al cargar datos.</td></tr>';
+                }
+            },
+
+            eliminarRegistro: async function(id) {
+                if(!confirm("¿Estás seguro de eliminar este registro? Esto no se puede deshacer.")) return;
+                
+                try {
+                    const { error } = await supabaseClient
+                        .from('registros_petulap')
+                        .delete()
+                        .eq('id', id);
+                        
+                    if(error) throw error;
+                    this.toast('Registro eliminado', 'success');
+                    this.cargarRegistros();
+                } catch(error) {
+                    this.toast('Error al eliminar', 'error');
+                }
+            }
+        };
+
+        // Inicialización al cargar la página
+        window.onload = () => {
+            // Animación de entrada
+            document.body.classList.add('fade-in');
+            
+            // Si el usuario presiona Enter en el login
+            document.getElementById('login-pass').addEventListener('keypress', function (e) {
+                if (e.key === 'Enter') {
+                    app.login();
+                }
+            });
+        };
+    </script>
+</body>
+</html>
